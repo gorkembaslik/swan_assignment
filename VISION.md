@@ -1,0 +1,5 @@
+Fintech inspires me; it's not about the money; it's about giving everyone who uses technology freedom and access. It's incredibly motivational to think about the fact that a simple code could replace complex systems and improve the way that people manage their lives.
+
+The reason why I want to work for SWAN is your commitment to "unreasonable innovation". Also, the opportunity of turning raw ideas into real systems by working directly with the executives is the ultimate hands on learning experience. I don't just want a standard internship; I want to be challenged and contribute to building the future, and SWAN’s culture seems built for that.
+
+An idea that I'd explore is a Financial Health Score API. Similar to a credit score, it would use open banking data to give users a simple, actionable score on their financial well-being (like their savings rate, spending habits, and investment health etc.) This single metric could give personalized advice within SWAN's ecosystem, helping users make smarter decisions without needing to be finance experts.
