@@ -1,25 +1,35 @@
 import hashlib
+import re
 import time
+import hmac
 
+SERVER_SECRET = "SWAN_SECRET_2025"
 
 def generate_pickup_code(student_id: str) -> str:
     """
     Generates an 8 character pickup code using:
     - Student ID for uniqueness
-    - Current timestamp (hourly bucket for time window validation)
+    - Current timestamp (10 minute bucket for time window validation)
     
     Logic: Uses time buckets so codes remain valid for validation
-    within 2 hours time window.
+    within 10 minute time window.
     """
-    # Get current hour bucket
-    current_hour = int(time.time() // 3600)
+    # Input validation
+    if not student_id or not isinstance(student_id, str):
+        raise ValueError("student_id must be a non-empty string")
+    
+    if not re.match(r'^[A-Za-z0-9_-]{3,20}$', student_id):
+        raise ValueError("student_id must be 3-20 alphanumeric characters")
+    
+    # Get current 10 minute bucket
+    current_bucket = int(time.time() // 600)
 
     # Unique string combining student_id and time bucket
-    data = f"{student_id}:{current_hour}"
+    data = f"{student_id}:{current_bucket}"
 
-    # Generating a hash because everyone can guess a simple combination. Then take the first 8 characters.
-    hash_object = hashlib.sha256(data.encode())
-    code = hash_object.hexdigest()[:8].upper()
+    # Create HMAC-SHA256 hash
+    hash = hmac.new(SERVER_SECRET.encode(), data.encode(), hashlib.sha256)
+    code = hash.hexdigest()[:8].upper()
 
     return code
 
@@ -28,18 +38,40 @@ def validate_pickup_code(student_id: str, code: str) -> bool:
     """
     Validates if a pickup code is correct for a student within the time window.
     
-    Logic: Checks code against current hour and previous hour buckets.
+    Logic: Checks code against current 10-minute bucket and previous bucket,
+    giving 10-20 minute validity window
+
+    Uses constant-time comparison to prevent timing attacks.
+    
+    Args:
+        student_id: Unique student identifier
+        code: The 8-character pickup code to validate
     """
-    current_hour = int(time.time() // 3600)
 
-    # Check current hour and previous hour (2 hours window)
-    for hour_offset in [0, -1]:
-        test_hour = current_hour + hour_offset
-        data = f"{student_id}:{test_hour}"
-        hash_object = hashlib.sha256(data.encode())
-        valid_code = hash_object.hexdigest()[:8].upper()
+    if not student_id or not isinstance(student_id, str):
+        return False
+    
+    if not re.match(r'^[A-Za-z0-9_-]{3,20}$', student_id):
+        raise ValueError("student_id must be 3-20 alphanumeric characters")
+    
+    if not code or not isinstance(code, str):
+        return False
+    
+    if not re.match(r'^[A-Fa-f0-9]{8}$', code):
+        return False
+    
+    current_bucket = int(time.time() // 600)
 
-        if code.upper() == valid_code:
+    # Check current bucket (0-10 min old) and previous bucket (10-20 min old)
+    for bucket_offset in [0, -1]:
+        test_bucket = current_bucket + bucket_offset
+        data = f"{student_id}:{test_bucket}"
+        
+        hash = hmac.new(SERVER_SECRET.encode(), data.encode(), hashlib.sha256)
+        valid_code = hash.hexdigest()[:8].upper()
+
+        # Constant-time comparison to prevent timing attacks
+        if hmac.compare_digest(valid_code, code):
             return True
 
     return False
@@ -56,7 +88,7 @@ if __name__ == "__main__":
     print(f"Codes Match: {validate_pickup_code(student1, code1)}")
     print()
 
-    # Example 2: Same student requests code again within the same hour
+    # Example 2: Same student requests code again within same bucket
     print(f"Student1: {student1} requests code again:")
     code1_again = generate_pickup_code(student1)
     print(f"New Code: {code1_again}")
@@ -77,9 +109,25 @@ if __name__ == "__main__":
     print()
 
     # Example 5: Simulate code expiration by checking an old code
-    print(f"Simulating code expiration for {student1}:")
-    three_hours_ago = int(time.time() // 3600) - 3
-    data = f"{student1}:{three_hours_ago}"
-    hash_object = hashlib.sha256(data.encode())
-    code3 = hash_object.hexdigest()[:8].upper()
-    print(f"Codes Match: {validate_pickup_code(student1, code3)}")
+    current_bucket = int(time.time() // 600)
+    two_buckets_ago = current_bucket - 1
+    data = f"{student1}:{two_buckets_ago}"
+    hmac_hash = hmac.new(SERVER_SECRET.encode(), data.encode(), hashlib.sha256)
+    valid_code = hmac_hash.hexdigest()[:8].upper()
+    
+    print(f"   Student: {student1}")
+    print(f"   Code from a bucket ago: {valid_code}")
+    is_valid = validate_pickup_code(student1, valid_code)
+    print(f"   Validation: {is_valid} (Expected: True)\n")
+
+    # Example 5: Simulate code expiration by checking an old code
+    current_bucket = int(time.time() // 600)
+    two_buckets_ago = current_bucket - 2
+    data = f"{student1}:{two_buckets_ago}"
+    hmac_hash = hmac.new(SERVER_SECRET.encode(), data.encode(), hashlib.sha256)
+    expired_code = hmac_hash.hexdigest()[:8].upper()
+    
+    print(f"   Student: {student1}")
+    print(f"   Code from 2 buckets ago: {expired_code}")
+    is_valid = validate_pickup_code(student1, expired_code)
+    print(f"   Validation: {is_valid} (Expected: False)\n")
